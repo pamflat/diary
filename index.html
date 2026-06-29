@@ -354,6 +354,48 @@
     border-bottom: 0.5px solid rgba(240,237,234,.08);
   }
 
+  /* ── EDIT MODE ── */
+  .det-edit-area {
+    width: 100%;
+    min-height: 200px;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    font-family: var(--font-serif);
+    font-size: 15px;
+    font-style: italic;
+    line-height: 1.9;
+    color: #F0EDEA;
+    border-bottom: 0.5px solid rgba(240,237,234,.15);
+    padding-bottom: .5rem;
+    display: none;
+  }
+
+  .det-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 1.25rem;
+  }
+
+  .det-btn {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: .08em;
+    padding: .4rem .9rem;
+    border: none;
+    cursor: pointer;
+    border-radius: 2px;
+  }
+
+  .det-btn-edit { background: rgba(240,237,234,.08); color: rgba(240,237,234,.6); }
+  .det-btn-edit:hover { background: rgba(240,237,234,.13); }
+  .det-btn-save { background: var(--accent); color: #fff; }
+  .det-btn-save:hover { background: var(--accent-hover); }
+  .det-btn-save:disabled { background: rgba(240,237,234,.1); cursor: default; }
+  .det-btn-cancel { background: transparent; color: rgba(240,237,234,.35); }
+  .det-btn-cancel:hover { color: rgba(240,237,234,.6); }
+
   /* ── SPINNER ── */
   .spinner {
     font-family: var(--font-mono);
@@ -439,6 +481,12 @@
         <span id="detail-date"></span>
       </div>
       <div class="det-body" id="detail-body"></div>
+      <textarea class="det-edit-area" id="detail-edit-area" oninput="onEditInput()"></textarea>
+      <div class="det-actions">
+        <button class="det-btn det-btn-edit" id="btn-edit-toggle" onclick="toggleEdit()">edit</button>
+        <button class="det-btn det-btn-save" id="btn-edit-save" onclick="saveEdit()" style="display:none" disabled>simpan</button>
+        <button class="det-btn det-btn-cancel" id="btn-edit-cancel" onclick="cancelEdit()" style="display:none">batal</button>
+      </div>
     </div>
   </div>
 </div>
@@ -593,12 +641,62 @@
     c.innerHTML = res.map(entryHTML).join('');
   }
 
+  let editingId = null;
+
   function openEntry(id) {
     const e = allEntries.find(x => x.id === id);
     if (!e) return;
+    editingId = id;
     document.getElementById('detail-date').textContent = fmtDate(e.created_at) + ' · ' + fmtTime(e.created_at);
     document.getElementById('detail-body').textContent = e.text;
+    document.getElementById('detail-body').style.display = 'block';
+    document.getElementById('detail-edit-area').style.display = 'none';
+    document.getElementById('btn-edit-toggle').style.display = 'inline-block';
+    document.getElementById('btn-edit-save').style.display = 'none';
+    document.getElementById('btn-edit-cancel').style.display = 'none';
     switchTab('detail');
+  }
+
+  function toggleEdit() {
+    const e = allEntries.find(x => x.id === editingId);
+    if (!e) return;
+    document.getElementById('detail-body').style.display = 'none';
+    const ta = document.getElementById('detail-edit-area');
+    ta.value = e.text;
+    ta.style.display = 'block';
+    ta.focus();
+    document.getElementById('btn-edit-toggle').style.display = 'none';
+    document.getElementById('btn-edit-save').style.display = 'inline-block';
+    document.getElementById('btn-edit-cancel').style.display = 'inline-block';
+    onEditInput();
+  }
+
+  function cancelEdit() {
+    document.getElementById('detail-body').style.display = 'block';
+    document.getElementById('detail-edit-area').style.display = 'none';
+    document.getElementById('btn-edit-toggle').style.display = 'inline-block';
+    document.getElementById('btn-edit-save').style.display = 'none';
+    document.getElementById('btn-edit-cancel').style.display = 'none';
+  }
+
+  function onEditInput() {
+    const val = document.getElementById('detail-edit-area').value.trim();
+    document.getElementById('btn-edit-save').disabled = val.length === 0;
+  }
+
+  async function saveEdit() {
+    const text = document.getElementById('detail-edit-area').value.trim();
+    if (!text || !editingId) return;
+    const btn = document.getElementById('btn-edit-save');
+    btn.disabled = true; btn.textContent = '...';
+    const { data, error } = await sb.from('diary_entries').update({ text }).eq('id', editingId).select().single();
+    btn.textContent = 'simpan';
+    if (error) { showToast('gagal update.'); btn.disabled = false; return; }
+    const idx = allEntries.findIndex(x => x.id === editingId);
+    if (idx !== -1) allEntries[idx] = data;
+    document.getElementById('detail-body').textContent = data.text;
+    cancelEdit();
+    showToast('catatan diperbarui.');
   }
 
   // ── EXPORT ──
